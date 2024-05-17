@@ -29,6 +29,9 @@ nav {
   display: inline-block;
   text-decoration: underline;
 }
+.nav-link {
+  color: white !important;
+}
 *,
 *::before,
 *::after {

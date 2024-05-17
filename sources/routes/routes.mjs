@@ -1,132 +1,137 @@
 import express from 'express';
-import session from 'express-session';
-import sqlite3 from 'sqlite3';
 import bcrypt from 'bcrypt';
-import path from 'path';
-import env from 'env';
 import { fileURLToPath } from 'url';
-import { hasSubscribers } from 'diagnostics_channel';
 
+import isAuthenticated from '../utils/secureAuth.mjs';
+import db from './db-config.mjs';
 
-// * initialize SQLite db
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const db = new sqlite3.Database(path.join(__dirname, '../database.db'));
-
-// * running db
-db.run(`CREATE TABLE IF NOT EXISTS users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  email TEXT UNIQUE,
-  username TEXT UNIQUE,
-  password TEXT
-)`, (err) => {
-  if (err) {
-    console.error('Error on creating table.');
-  } else {
-    console.log('Successfully creating table.');
-  }
-})
-
-// * initialize express app / sesion / router
+// get router
 const router = express.Router();
-const app = express();
-
-app.use(session({
-  secret: process.env.SECURITY_KEY || '12345678',
-  resave: false,
-  saveUninitialized: true,
-  cookie: { secure: false }
-}));
-
-
 
 // * post
-// & user registration route
+// user registration route
 router.post('/register', async (req, res) => {
   const { email, username, password, passwordRepeat } = req.body;
 
-  // if the fields are not empty
+  console.log(email, username, password, passwordRepeat)
+
   if (!email || !username || !password || !passwordRepeat) {
-    return res.render('register', { message: 'All fields are required.' });
+    return res.render('register', { errorMessage: 'All fields are required.' });
   }
 
-  // if the passwords are the same
+  // Check if passwords match
   if (password !== passwordRepeat) {
-    return res.render('register', { message: 'Passwords do not match.' });
+    return res.render('register', { errorMessage: 'Passwords do not match.' });
   }
 
   try {
-    const hashedPassword = await bcrypt.hash(password, 10);
-    // insert into db
-    db.run('INSERT INTO users (email, username, password) VALUES (?, ?, ?)', [email, username, hashedPassword], (err) => {
+    const timestamp = new Date().toISOString().split('T')[0];
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    // Insert user into database
+    db.query('INSERT INTO users (email, name, password, register_date) VALUES (?, ?, ?, ?)', [email, username, hashedPassword, timestamp], (err) => {
       if (err) {
+        // Handle registration error
         console.error('Error registering user:', err.message);
-        // if the user already exist
-        if (err.message.includes('UNIQUE constraint failed')) {
-          return res.render('register', { message: 'Username or email already exists.' });
+        if (err.message.includes('ER_DUP_ENTRY')) {
+          return res.render('register', { errorMessage: 'Username or email already exists.' });
         }
-        return res.render('register', { message: 'Error registering user.' });
+        return res.render('register', { errorMessage: 'Error registering user.' });
       } else {
+        // hold the user data
         const userData = {
           email: email,
           username: username,
-          timestamp: new Date().toISOString().split('T')[0]
+          timestamp: timestamp
+        };
+
+        // Ensure session exists
+        if (!req.session) {
+          console.error('Session not initialized.');
+          return res.render('register', { errorMessage: 'Session not initialized.'});
         }
-        return res.render('user', { message: 'User registered successfully.', data: userData }); // * YOU NEED TO REDIRECT DATA TO THE URL THEN GET IT AND SET TO THE PROFILE PARAMETERS 
+
+        // Store user data in session
+        req.session.user = userData;
+
+        // Redirect user
+        return res.redirect(`/login`);
       }
-    })
+    });
   } catch (err) {
-    console.error('Build', err);
-    return res.render('register', { message: 'Error registering user.'});
+    console.error('Error registering user:', err.message);
+    return res.render('register', { errorMessage: 'Error registering user.' });
   }
+});
+// user login route
+router.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+
+  db.query('SELECT * FROM users WHERE name = ?', [username], async (err, results) => {
+    if (err) {
+      console.error('Error logging in:', err);
+      return res.render('login', { errorMessage: 'Error loggin in.'});
+    }
+
+    // get only the user data
+    const user = results[0];
+    console.log('user:', user);
+
+    if (!user) {
+      return res.render('login', { errorMessage: 'No such user. Try to register before.'});
+    }
+
+    try {
+      // compare user pass from one at the server
+      if (await bcrypt.compare(password, user.password)) {
+        req.session.user = {
+          email: user.email,
+          username: user.name,
+          timestamp: user.register_date
+        }
+        return res.redirect('/user');
+      } else {
+        console.error('Invalid username or password.');
+        return res.render('login', { errorMessage: 'Invalid username or password.'})
+      }
+    } catch (err) {
+      console.error('Error logging in', err);
+      return res.render('login', { errorMessage: "Error loggin in. There is registration page." });
+    }
+  })
 })
-
-// & user auth route
-// router.post('/login', (req, res) => {
-//   const { username, password } = req.body;
-
-//   db.get('SELECT * FROM users WHERE username = ? AND password = ?', [username, password], (err) => {
-//     if (err) {
-//       console.error('Error logging in:', err);
-//       res.render('auth', { message: 'Error logging in' });
-//     } else if (user) {
-//       req.session.user = user; // store data user in session
-//       res.render('auth', { message: 'Users successfully logged in.' });
-//       console.log(req.session.user);
-//     } else {
-//       res.render('auth', { message: 'Invalid username or password' });
-//     }
-//   })
-// })
 
 // * get
-// & index page route
+// index page route
 router.get('/', (req, res) => {
-  res.render('index', { message: '' });
+  res.render('index');
 })
-// & login page route
+// login page route
 router.get('/login', (req, res) => {
-  res.render('login', { message: '' })
+  res.render('login', {errorMessage: ''})
 })
-// & register page route
+// register page route
 router.get('/register', (req, res) => {
-  res.render('register', { message: '' })
+  res.render('register', {errorMessage: ''})
 })
-// & user page route
-router.get('/user', (req, res) => {
-  res.render('user', { message: '', data: '' })
-})
- 
 
-// & user logout route
-// router.get('/logout', (req, res) => {
-//   req.session.destroy((err) => {
-//     if (err) {
-//       res.render('index', { message: 'Error loging out.' });
-//     } else {
-//       res.render('index', { message: 'Session destroyed' });
-//     }
-//   })
-// })
+// user page route
+router.get('/user', isAuthenticated, (req, res) => {
+  // get user data from session
+  res.render('user', {user: req.session.user, errorMessage: ''});
+})
+// user logout route
+router.get('/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      console.error('Error destroying session:', err);
+      return res.render('login', { errorMessage: 'Error loging out.' });
+    }
+    res.clearCookie('connect.sid', { path: '/'})
+
+    // redirect user to the home page
+    return res.redirect('/');
+  })
+})
 
 export default router;

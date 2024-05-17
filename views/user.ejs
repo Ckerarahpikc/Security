@@ -15,33 +15,27 @@
 </head>
 <body>
 
-  <nav class="bg-warning">
+  <nav class="bg-warning navbar-dark bg-dark">
     <ul class="navbar-nav">
-      <% if (message) { %>
       <li class="nav-item">
         <a class="nav-link" href="/">Home</a>
       </li>
       <li class="nav-item">
-        <a class="nav-link active" aria-current="page" href="/user">Profile</a>
+        <a class="nav-link" href="/logout">Logout</a>
       </li>
-      <% } else { %>
-      <li class="nav-item">
-        <a class="nav-link" href="/">Home</a>
-      </li>
-      <% } %>
     </ul>
   </nav>
 
   <main>
-    <% if (message) { %>
-    <div><h1><%= message %></h1></div>
+    <% if (!errorMessage) { %>
     <div>
-      <p><strong>Username:</strong> <%= data.username %></p>
-      <p><strong>Email:</strong> <%= data.email %></p>
-      <p><strong>Account created:</strong> <%= data.timestamp %></p>
+      <p><strong>Username:</strong> <%= user.username %></p>
+      <p><strong>Email:</strong> <%= user.email %></p>
+      <p><strong>Account Created:</strong> <%= user.timestamp %></p>
     </div>
     <% } else { %>
     <h1 class="text-danger text-center mt-5">ERROR: 404 | USER NOT FOUND.</h1>
+    <p class="text-danger"><%= errorMessage %></p>
     <% } %>
   </main>
   

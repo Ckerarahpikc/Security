@@ -15,15 +15,10 @@
 </head>
 <body>
 
-  <nav class="bg-warning">
+  <nav class="bg-warning navbar-dark bg-dark">
     <ul class="navbar-nav">
       <li class="nav-item">
         <a class="nav-link" href="/">Home</a>
-      </li>
-    </ul>
-    <ul class="navbar-nav">
-      <li class="nav-item">
-        <span class="auth-align"><a href="/login" class="nav-link active" aria-current="page">LogIn</a> / <a href="/register" class="nav-link">Register</a></span>
       </li>
     </ul>
   </nav>
@@ -41,8 +36,8 @@
           <input type="password" class="form-control" name="password" required>
         </div>
         <div>
-          <% if (message) { %>
-            <p class="text-danger"><%= message %></p>
+          <% if (errorMessage) { %>
+            <p class="text-danger"><%= errorMessage %></p>
           <% } %>
         </div>
         <div>Dont have any accout yet? <a href="/register">Register <span class="fs-5">&rarr;</span></a></div>
